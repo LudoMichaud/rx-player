@@ -33,13 +33,18 @@ function debounce(fn : () => void, delay : number) : () => void {
   };
 }
 
+interface IError {
+  type: string;
+  fatal: boolean;
+}
+
 interface IBackoffOptions {
   retryDelay : number;
   totalRetry : number;
   shouldRetry? : (error : Error) => boolean;
   resetDelay? : number;
-  errorSelector? : (error : Error, retryCount : number) => Error;
-  onRetry? : (error : Error, retryCount : number) => void;
+  errorSelector? : (error : Error|IError, retryCount : number) => Error|IError;
+  onRetry? : (error : Error|IError, retryCount : number) => void;
 }
 
 /**
@@ -179,4 +184,5 @@ function retryableFuncWithBackoff<T, I>(
 export {
   retryWithBackoff,
   retryableFuncWithBackoff,
+  IError,
 };
