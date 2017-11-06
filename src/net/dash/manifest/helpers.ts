@@ -20,7 +20,16 @@
 import arrayIncludes from "../../../utils/array-includes";
 import assert from "../../../utils/assert";
 
-const iso8601Duration = /^P(([\d.]*)Y)?(([\d.]*)M)?(([\d.]*)D)?T?(([\d.]*)H)?(([\d.]*)M)?(([\d.]*)S)?/;
+import {
+  IRepresentationDash,
+  IAdaptationDash,
+  IAccessibility,
+  IIndex,
+  IRole,
+} from "../types";
+
+const iso8601Duration =
+  /^P(([\d.]*)Y)?(([\d.]*)M)?(([\d.]*)D)?T?(([\d.]*)H)?(([\d.]*)M)?(([\d.]*)S)?/;
 const rangeRe = /([0-9]+)-([0-9]+)/;
 const frameRateRe = /([0-9]+)(\/([0-9]+))?/;
 
@@ -30,13 +39,14 @@ const KNOWN_ADAPTATION_TYPES = ["audio", "video", "text", "image"];
  * @param {Object} index
  * @returns {Number}
  */
-function calculateIndexLastLiveTimeReference(index) : number {
+function calculateIndexLastLiveTimeReference(index: IIndex) : number {
   if (index.indexType === "timeline") {
     const { ts, r, d } = index.timeline[index.timeline.length - 1];
 
     // TODO FIXME does that make sense?
-    const securityTime = Math.min(Math.max(d / index.timescale, 5), 10);
-    return ((ts + (r + 1) * d) / index.timescale) - securityTime;
+    const dd = d ? d : 0;
+    const securityTime = Math.min(Math.max(dd / index.timescale, 5), 10);
+    return ((ts + (r + 1) * dd) / index.timescale) - securityTime;
   }
   // By default (e.g. for templates), live Edge is right now - 5s
   return Date.now() / 1000 - 5;
@@ -161,7 +171,11 @@ function parseByteRange(str : string) : [number, number]|null {
  * @param {*} init - the initial value for the accumulator
  * @returns {*} - the accumulator
  */
-function reduceChildren(root, fn, init) {
+function reduceChildren<T>(
+  root: Element,
+  fn: (res: T, name: string, node: Element) => T,
+  init: T
+): T {
   let node = root.firstElementChild;
   let r = init;
   while (node) {
@@ -178,7 +192,7 @@ function reduceChildren(root, fn, init) {
  * @param {Object} accessibility
  * @returns {Boolean}
  */
-function isVisuallyImpaired(accessibility) : boolean {
+function isVisuallyImpaired(accessibility: IRole) : boolean {
   if (!accessibility) {
     return false;
   }
@@ -203,9 +217,9 @@ function isVisuallyImpaired(accessibility) : boolean {
  * @param {Object} adaptation
  * @returns {string} - "audio"|"video"|"text"|"image"|"metadata"|"unknown"
  */
-function inferAdaptationType(adaptation) : string {
-  const { mimeType = "" } : { mimeType : string } = adaptation;
-  const topLevel = mimeType.split("/")[0];
+function inferAdaptationType(adaptation: IAdaptationDash) : string {
+  const { mimeType } : { mimeType : string|null } = adaptation;
+  const topLevel = mimeType ? mimeType.split("/")[0] : "";
   if (arrayIncludes(KNOWN_ADAPTATION_TYPES, topLevel)) {
     return topLevel;
   }
@@ -233,9 +247,9 @@ function inferAdaptationType(adaptation) : string {
   }
 
   // take 1st representation's mimetype as default
-  const representations: any[] = adaptation.representations;
+  const representations: IRepresentationDash[] = adaptation.representations;
   if (representations.length) {
-    const firstReprMimeType = representations[0].mimeType;
+    const firstReprMimeType = representations[0].mimeType || "";
     const _topLevel = firstReprMimeType.split("/")[0];
     if (arrayIncludes(KNOWN_ADAPTATION_TYPES, _topLevel)) {
       return _topLevel;
@@ -253,7 +267,7 @@ function inferAdaptationType(adaptation) : string {
  * @param {Object} accessibility
  * @returns {Boolean}
  */
-function isHardOfHearing(accessibility) {
+function isHardOfHearing(accessibility: IAccessibility) {
   if (!accessibility) {
     return false;
   }
@@ -277,7 +291,7 @@ function isHardOfHearing(accessibility) {
  * @param {Object} adaptation
  * @returns {Number|undefined}
  */
-const getLastLiveTimeReference = (adaptation) => {
+const getLastLiveTimeReference = (adaptation: IAdaptationDash): number|undefined => {
   // Here's how we do, for each possibility:
   //  1. only the adaptation has an index (no representation has):
   //    - returns the index last time reference
@@ -299,15 +313,22 @@ const getLastLiveTimeReference = (adaptation) => {
   }
 
   const representations = adaptation.representations || [];
-  const representationsWithIndex = representations.filter(r => r && r.index);
+  const representationsWithIndex = representations
+    .filter((r: IRepresentationDash) => r && r.index);
 
-  if (!representations.length) {
+  if (!representations.length && adaptation.index) {
     return calculateIndexLastLiveTimeReference(adaptation.index);
   }
 
   const representationsMin = Math.min(
     ...representationsWithIndex
-      .map(r => calculateIndexLastLiveTimeReference(r.index))
+      .map((r: IRepresentationDash) => {
+        if (r.index) {
+          return calculateIndexLastLiveTimeReference(r.index);
+        } else {
+          return Infinity;
+        }
+      })
   );
 
   // should not happen, means invalid index data has been found

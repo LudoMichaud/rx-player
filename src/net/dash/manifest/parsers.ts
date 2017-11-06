@@ -25,24 +25,29 @@ import {
   parseByteRange,
 } from "./helpers";
 import {
-  filterMPD,
-  filterPeriod,
-  filterAdaptation,
-  filterRepresentation,
-} from "./filters";
+  IRole,
+  ISegmentURL,
+  IPeriodDash,
+  ISegmentBase,
+  IAccessibility,
+  IAdaptationDash,
+  IInitialization,
+  ISegmentTimeLine,
+  IRepresentationDash,
+  IContentComponentDash,
+  IContentProtectionDash,
+  ContentProtectionParser,
+} from "../types";
+
+import { IParsedManifest } from "../../types";
 
 import feedAttributes from "./attributes";
 
-const representationKeysInheritedFromAdaptation = [
-  "codecs",
-  "height",
-  "index",
-  "mimeType",
-  "width",
-];
-
-function parseMPD(root, contentProtectionParser) {
-  const parser = reduceChildren(root, (res, name, node) => {
+function parseMPD(
+  root: Element,
+  contentProtectionParser?: ContentProtectionParser
+) {
+  const mpd = reduceChildren<IParsedManifest>(root, (res, name, node) => {
     switch (name) {
 
       case "BaseURL":
@@ -50,6 +55,9 @@ function parseMPD(root, contentProtectionParser) {
         break;
 
       case "Location":
+        if (!res.locations) {
+          res.locations = [];
+        }
         res.locations.push(node.textContent);
         break;
 
@@ -65,18 +73,21 @@ function parseMPD(root, contentProtectionParser) {
     locations: [],
   });
 
-  const parsed = feedAttributes(root, parser);
+  const parsedMpd = feedAttributes(root, mpd);
 
-  if (/dynamic/.test(parsed.type)) {
-    const adaptations = parsed.periods[0].adaptations;
+  if (parsedMpd.type && /dynamic/.test(parsedMpd.type)) {
+    // As adaptations can either be from DASH or SMOOTH in parsed mpd object,
+    // we must type adaptations as IAdaptationDash.
+    const adaptations = parsedMpd.periods[0].adaptations as IAdaptationDash[];
 
-    const videoAdaptation = adaptations.filter((a) => a.type === "video")[0];
+    const videoAdaptation = adaptations
+      .filter(a => a.type === "video")[0];
 
     let lastRef = getLastLiveTimeReference(videoAdaptation);
 
     if (__DEV__) {
       assert(lastRef);
-      assert(parsed.availabilityStartTime);
+      assert(parsedMpd.availabilityStartTime);
     }
 
     // if last time not found / something was invalid in the indexes, set a
@@ -85,14 +96,16 @@ function parseMPD(root, contentProtectionParser) {
       log.warn("Live edge not deduced from manifest, setting a default one");
       lastRef = Date.now() / 1000 - 60;
     }
-
-    parsed.availabilityStartTime =
-      parsed.availabilityStartTime.getTime() / 1000;
-    parsed.presentationLiveGap =
-      Date.now() / 1000 - (lastRef + parsed.availabilityStartTime);
+    if (parsedMpd.availabilityStartTime &&
+        typeof parsedMpd.availabilityStartTime !== "number") {
+      parsedMpd.availabilityStartTime =
+        parsedMpd.availabilityStartTime.getTime() / 1000;
+      parsedMpd.presentationLiveGap =
+        Date.now() / 1000 - (lastRef + parsedMpd.availabilityStartTime);
+    }
   }
 
-  return filterMPD(parsed);
+  return parsedMpd;
 }
 
 /**
@@ -101,9 +114,12 @@ function parseMPD(root, contentProtectionParser) {
  * @param {Function} contentProtectionParser
  * @returns {Object}
  */
-function parsePeriod(root, contentProtectionParser) {
-  const parsed =
-    feedAttributes(root, reduceChildren(root, (res, name, node) => {
+function parsePeriod(
+  root: Element,
+  contentProtectionParser?: ContentProtectionParser
+): IPeriodDash {
+  const period =
+    feedAttributes(root, reduceChildren<IPeriodDash>(root, (res, name, node) => {
       switch (name) {
 
         case "BaseURL":
@@ -120,14 +136,20 @@ function parsePeriod(root, contentProtectionParser) {
 
       }
       return res;
-    }, { adaptations: [] }));
+    }, {
+      id: null,
+      adaptations: [],
+    }));
 
-  return filterPeriod(parsed);
+  return period;
 }
 
-function parseAdaptationSet(root, contentProtectionParser) {
+function parseAdaptationSet(
+  root: Element,
+  contentProtectionParser?: ContentProtectionParser
+): IAdaptationDash {
   let accessibility;
-  const parser = reduceChildren(root, (res, name, node) => {
+  const adapatationSet = reduceChildren<IAdaptationDash>(root, (res, name, node) => {
     switch (name) {
       // case "Rating": break;
       // case "Viewpoint": break;
@@ -176,54 +198,56 @@ function parseAdaptationSet(root, contentProtectionParser) {
     }
 
     return res;
-  }, { representations: [] });
+  }, {
+      index: null,
+      id: null,
+      representations: [],
+      mimeType: null,
+  });
 
-  const parsed = feedAttributes(root, parser);
+  const parsedAdaptation = feedAttributes(root, adapatationSet);
 
-  parsed.type = inferAdaptationType(parsed);
+  parsedAdaptation.type = inferAdaptationType(parsedAdaptation);
 
-  parsed.accessibility = [];
+  parsedAdaptation.accessibility = [];
 
-  if (isHardOfHearing(accessibility)) {
-    parsed.accessibility.push("hardOfHearing");
+  if (accessibility && isHardOfHearing(accessibility)) {
+    parsedAdaptation.accessibility.push("hardOfHearing");
   }
 
-  if (isVisuallyImpaired(accessibility)) {
-    parsed.accessibility.push("visuallyImpaired");
+  if (accessibility && isVisuallyImpaired(accessibility)) {
+    parsedAdaptation.accessibility.push("visuallyImpaired");
   }
 
   // representations inherit some adaptation keys
-  parsed.representations = parsed.representations
-    .map((representation) => {
-      representationKeysInheritedFromAdaptation.forEach(key => {
-        if (
-          !representation.hasOwnProperty(key) &&
-          parsed.hasOwnProperty(key)
-        ) {
-          // TODO clone objects, they should not share the same ref
-          representation[key] = parsed[key];
-        }
-      });
-
+  if (parsedAdaptation.representations) {
+    parsedAdaptation.representations = parsedAdaptation.representations
+    .map((representation: IRepresentationDash) => {
+      if (parsedAdaptation.codecs && representation.codecs == null) {
+        representation.codecs = parsedAdaptation.codecs;
+      }
+      if (parsedAdaptation.height && representation.height == null) {
+        representation.height = parsedAdaptation.height;
+      }
+      if (parsedAdaptation.index && representation.index == null) {
+        representation.index = parsedAdaptation.index;
+      }
+      if (parsedAdaptation.mimeType && representation.mimeType == null) {
+        representation.mimeType = parsedAdaptation.mimeType;
+      }
+      if (parsedAdaptation.width && representation.width == null) {
+          representation.width = parsedAdaptation.width;
+      }
       return representation;
     });
+  }
 
-  return filterAdaptation(parsed);
+  return parsedAdaptation;
 }
 
-function parseRepresentation(root) {
-  const parser = reduceChildren(root, (res, name, node) => {
+function parseRepresentation(root: Element): IRepresentationDash {
+  const representation = reduceChildren<IRepresentationDash>(root, (res, name, node) => {
     switch (name) {
-      // case "FramePacking": break;
-      // case "AudioChannelConfiguration": break;
-      // case "ContentProtection":
-      //   res.contentProtection = parseContentProtection(node);
-      //   break;
-      // case "EssentialProperty": break;
-      // case "SupplementalProperty": break;
-      // case "InbandEventStream": break;
-      // case "SubRepresentation": break;
-
       case "BaseURL":
         res.baseURL = node.textContent;
         break;
@@ -241,25 +265,29 @@ function parseRepresentation(root) {
         break;
     }
     return res;
-  }, {});
+  }, {
+    id: null,
+    index: null,
+    mimeType: null,
+  });
 
-  const parsed = feedAttributes(root, parser);
-  return filterRepresentation(parsed);
+  const parsedRep = feedAttributes(root, representation);
+  return parsedRep;
 }
 
-function parseRole(root) {
-  return feedAttributes(root);
+function parseRole(root: Element): IRole {
+  return feedAttributes<IRole>(root);
 }
 
-function parseAccessibility(root) {
-  return feedAttributes(root);
+function parseAccessibility(root: Element): IAccessibility {
+  return feedAttributes<IRole>(root);
 }
 
-function parseContentComponent(root) {
-  return feedAttributes(root);
+function parseContentComponent(root: Element): IContentComponentDash {
+  return feedAttributes<IContentComponentDash>(root);
 }
 
-function parseSegmentTemplate(root) {
+function parseSegmentTemplate(root: Element): ISegmentBase {
   const base = parseMultipleSegmentBase(root);
   if (!base.indexType) {
     base.indexType = "template";
@@ -267,13 +295,13 @@ function parseSegmentTemplate(root) {
   return base;
 }
 
-function parseSegmentList(root) {
+function parseSegmentList(root: Element): ISegmentBase {
   const base = parseMultipleSegmentBase(root);
   base.list = [];
   base.indexType = "list";
-  return reduceChildren(root, (res, name, node) => {
+  return reduceChildren<ISegmentBase>(root, (res, name, node) => {
     if (name === "SegmentURL") {
-      res.list.push(feedAttributes(node));
+      res.list.push(feedAttributes<ISegmentURL>(node));
     }
     return res;
   }, base);
@@ -285,17 +313,22 @@ function parseSegmentList(root) {
  * @param {Function} contentProtectionParser
  * @returns {Object}
  */
-function parseContentProtection(root, contentProtectionParser) {
-  return contentProtectionParser(feedAttributes(root), root);
+function parseContentProtection(
+  root: Element,
+  contentProtectionParser?: ContentProtectionParser
+): IContentProtectionDash|undefined {
+  if (contentProtectionParser) {
+    return contentProtectionParser(feedAttributes<IContentProtectionDash>(root), root);
+  }
 }
 
-function parseSegmentBase(root) {
-  const index = reduceChildren(root, (res, name, node) => {
+function parseSegmentBase(root: Element): ISegmentBase {
+  const index = reduceChildren<ISegmentBase>(root, (res, name, node) => {
     if (name === "Initialization") {
       res.initialization = parseInitialization(node);
     }
     return res;
-  }, feedAttributes(root));
+  }, feedAttributes<ISegmentBase>(root));
 
   if (root.nodeName === "SegmentBase") {
     index.indexType = "base";
@@ -304,8 +337,8 @@ function parseSegmentBase(root) {
   return index;
 }
 
-function parseMultipleSegmentBase(root) {
-  return reduceChildren(root, (res, name, node) => {
+function parseMultipleSegmentBase(root: Element): ISegmentBase {
+  return reduceChildren<ISegmentBase>(root, (res, name, node) => {
     if (name === "SegmentTimeline") {
       res.indexType = "timeline";
       res.timeline = parseSegmentTimeline(node);
@@ -314,10 +347,10 @@ function parseMultipleSegmentBase(root) {
   }, parseSegmentBase(root));
 }
 
-function parseSegmentTimeline(root) {
-  return reduceChildren(root, (arr, _name, node) => {
+function parseSegmentTimeline(root: Element): ISegmentTimeLine[] {
+  return reduceChildren<ISegmentTimeLine[]>(root, (arr, _name, node) => {
     const len = arr.length;
-    const seg = feedAttributes(node);
+    const seg = feedAttributes<ISegmentTimeLine>(node);
     if (seg.ts == null) {
       const prev = (len > 0) && arr[len - 1];
       seg.ts = prev
@@ -332,12 +365,12 @@ function parseSegmentTimeline(root) {
   }, []);
 }
 
-function parseInitialization(root) {
+function parseInitialization(root: Element): IInitialization {
   let range;
   let media;
 
   if (root.hasAttribute("range")) {
-    range = parseByteRange(root.getAttribute("range"));
+    range = parseByteRange(root.getAttribute("range") as string);
   }
 
   if (root.hasAttribute("sourceURL")) {
@@ -348,5 +381,10 @@ function parseInitialization(root) {
 }
 
 export {
+  IParsedManifest,
+  IRole,
   parseMPD,
+  IPeriodDash,
+  IAdaptationDash,
+  IRepresentationDash,
 };
