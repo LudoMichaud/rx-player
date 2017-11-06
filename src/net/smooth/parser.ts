@@ -27,6 +27,17 @@ import {
   hexToBytes,
 } from "../../utils/bytes";
 
+import {
+  IHSSKeySystem,
+  IAdaptationSmooth,
+  IHSSManifestSegment,
+  IContentProtectionSmooth,
+ } from "./types";
+
+import {
+   IParsedManifest
+ } from "../types";
+
 import assert from "../../utils/assert";
 import { normalize as normalizeLang } from "../../utils/languages";
 
@@ -38,72 +49,13 @@ interface IParserFunctions {
   parseFromDocument : (manifest : Document) => IParsedManifest;
 }
 
-interface IContentProtection {
-    keyId : string;
-    keySystems: HSSKeySystem[];
-}
-
-interface IInitialization {
-  range: Array<number|null>;
-  indexRange: Array<number|null>;
-  media: string|null;
-}
-
-interface IIndex {
-  timeline: IHSSManifestSegment[];
-  indexType: string;
-  timescale: number;
-  initialization: IInitialization;
-}
-
-interface IAdaptation {
-  id?: string;
-  smoothProtection?: IContentProtection|null;
-  type: string;
-  accessibility: string[];
-  index: IIndex;
-  representations: Array<IDictionary<string|number>>; // XXX TODO
-  name: string|null;
-  language: string|null;
-  normalizedLanguage: string|null;
-  baseURL: string|null;
-}
-
-interface IPeriod {
-  duration: number;
-  adaptations: IAdaptation[];
-  laFragCount: number;
-}
-
-interface IParsedManifest {
-  transportType: string;
-  profiles: string;
-  type: string;
-  suggestedPresentationDelay: number|undefined;
-  timeShiftBufferDepth: number|undefined;
-  presentationLiveGap: number|undefined;
-  availabilityStartTime: number|undefined;
-  periods: IPeriod[];
-}
-
-interface IHSSManifestSegment {
-  ts : number;
-  d? : number;
-  r : number;
-}
-
-interface HSSKeySystem {
-  systemId : string;
-  privateData : Uint8Array;
-}
-
-const DEFAULT_MIME_TYPES: Dictionary<string> = {
+const DEFAULT_MIME_TYPES: IDictionary<string> = {
   audio: "audio/mp4",
   video: "video/mp4",
   text: "application/ttml+xml",
 };
 
-const DEFAULT_CODECS: Dictionary<string> = {
+const DEFAULT_CODECS: IDictionary<string> = {
   audio: "mp4a.40.2",
   video: "avc1.4D401E",
 };
@@ -198,7 +150,7 @@ function parseBoolean(val : string|null) : boolean {
  * @returns {Number}
  */
 function calcLastRef(
-  adaptation? : IAdaptation
+  adaptation? : IAdaptationSmooth
 ) : number {
   if (!adaptation) { return Infinity; }
   const { index } = adaptation;
@@ -213,7 +165,7 @@ function calcLastRef(
  */
 function getKeySystems(
   keyIdBytes : Uint8Array
-) : HSSKeySystem[] {
+) : IHSSKeySystem[] {
   return [
     {
       // Widevine
@@ -298,7 +250,7 @@ function createSmoothStreamingParser(
     root : Element
   ) : {
     keyId : string,
-    keySystems: HSSKeySystem[],
+    keySystems: IHSSKeySystem[],
   } {
     const header = root.firstElementChild as Element;
     assert.equal(header.nodeName, "ProtectionHeader", "Protection should have ProtectionHeader child");
@@ -399,7 +351,7 @@ function createSmoothStreamingParser(
   function parseAdaptation(
     root : Element,
     timescale : number
-  ): IAdaptation|null {
+  ): IAdaptationSmooth|null {
     if (root.hasAttribute("Timescale")) {
       timescale = +(root.getAttribute("Timescale") || 0);
     }
@@ -523,8 +475,8 @@ function createSmoothStreamingParser(
       protection,
       adaptations,
     } = reduceChildren <{
-      protection: IContentProtection|null,
-      adaptations: IAdaptation[]
+      protection: IContentProtectionSmooth|null,
+      adaptations: IAdaptationSmooth[]
     }> (root, (res, name, node) => {
       switch (name) {
       case "Protection":  {
@@ -532,7 +484,7 @@ function createSmoothStreamingParser(
         break;
       }
       case "StreamIndex":
-        const ada : IAdaptation|null = parseAdaptation(node, timescale);
+        const ada : IAdaptationSmooth|null = parseAdaptation(node, timescale);
         if (ada) {
           let i = 0;
           let id;
