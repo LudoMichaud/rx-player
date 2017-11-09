@@ -43,7 +43,7 @@ const {
 interface IRepresentationChooserClockTick {
   bufferGap : number;
   position : number;
-  bitrate : number;
+  bitrate : number|undefined;
   speed : number;
 }
 
@@ -94,11 +94,11 @@ interface IFilters {
 }
 
 interface IRepresentationChooserOptions {
-  limitWidth$: Observable<number>;
-  throttle$: Observable<number>;
-  initialBitrate: number;
-  manualBitrate: number;
-  maxAutoBitrate: number;
+  limitWidth$?: Observable<number>;
+  throttle$?: Observable<number>;
+  initialBitrate?: number;
+  manualBitrate?: number;
+  maxAutoBitrate?: number;
 }
 
 /**
@@ -166,7 +166,7 @@ function getConcernedRequest(
 function estimateRequestBandwidth(
   request : IRequestInfo,
   requestTime : number,
-  bitrate : number
+  bitrate : number|undefined
 ) : number {
   let estimate;
 
@@ -193,14 +193,14 @@ function estimateRequestBandwidth(
   }
 
   // if that fails / no progress event, take a guess
-  if (!estimate) {
+  if (!estimate && bitrate) {
     const chunkDuration = request.duration;
     const chunkSize = chunkDuration * bitrate;
 
     // take current duration of request as a base
     estimate = chunkSize / (requestTime * 5 / 4);
   }
-  return estimate;
+  return estimate || 0;
 }
 
 /**
@@ -403,11 +403,18 @@ export default class RepresentationChooser {
                   // (for this class) in an observable, not too comfortable with
                   // that.
                   this.resetEstimate();
-                  nextBitrate = Math.min(
-                    bandwidthEstimate,
-                    bitrate,
-                    maxAutoBitrate
-                  );
+                  if (bitrate) {
+                    nextBitrate = Math.min(
+                      bandwidthEstimate,
+                      bitrate,
+                      maxAutoBitrate
+                    );
+                  } else {
+                    nextBitrate = Math.min(
+                      bandwidthEstimate,
+                      maxAutoBitrate
+                    );
+                  }
                 }
               }
             }
