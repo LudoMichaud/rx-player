@@ -115,20 +115,20 @@ function sessionEventsHandler(
    * @param {Boolean} fatal
    * @returns {Error|Object}
    */
-  function licenseErrorSelector(error: IError, fatal: boolean): IError|Error {
-    if (error.type === ErrorTypes.ENCRYPTED_MEDIA_ERROR) {
-      error.fatal = fatal;
-      return error;
-    } else {
-      return new EncryptedMediaError("KEY_LOAD_ERROR", error, fatal);
-    }
+  function licenseErrorSelector(error: IError|Error, fatal: boolean): IError|Error {
+      if (!(error instanceof Error) && error.type === ErrorTypes.ENCRYPTED_MEDIA_ERROR) {
+        error.fatal = fatal;
+        return error;
+      } else {
+        return new EncryptedMediaError("KEY_LOAD_ERROR", error, fatal);
+      }
   }
 
   const getLicenseRetryOptions = {
     totalRetry: 2,
     retryDelay: 200,
-    errorSelector: (error: IError) => licenseErrorSelector(error, true),
-    onRetry: (error: IError) => errorStream.next(licenseErrorSelector(error, false)),
+    errorSelector: (error: IError|Error) => licenseErrorSelector(error, true),
+    onRetry: (error: IError|Error) => errorStream.next(licenseErrorSelector(error, false)),
   };
 
   const keyErrors: Observable<Event> = onKeyError$(session).map((error) => {

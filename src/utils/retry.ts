@@ -34,6 +34,8 @@ function debounce(fn : () => void, delay : number) : () => void {
 }
 
 interface IError {
+  message: string;
+  name: string;
   type: string;
   fatal: boolean;
 }
