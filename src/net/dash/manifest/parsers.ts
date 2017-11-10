@@ -84,25 +84,18 @@ function parseMPD(
     const videoAdaptation = adaptations
       .filter(a => a.type === "video")[0];
 
-    let lastRef = getLastLiveTimeReference(videoAdaptation);
+    const lastRef = getLastLiveTimeReference(videoAdaptation);
 
     if (__DEV__) {
-      assert(lastRef);
       assert(parsedMpd.availabilityStartTime);
     }
 
-    // if last time not found / something was invalid in the indexes, set a
-    // default live time.
-    if (!lastRef) {
-      log.warn("Live edge not deduced from manifest, setting a default one");
-      lastRef = Date.now() / 1000 - 60;
-    }
     if (parsedMpd.availabilityStartTime &&
         typeof parsedMpd.availabilityStartTime !== "number") {
       parsedMpd.availabilityStartTime =
         parsedMpd.availabilityStartTime.getTime() / 1000;
-      parsedMpd.presentationLiveGap =
-        Date.now() / 1000 - (lastRef + parsedMpd.availabilityStartTime);
+      parsedMpd.presentationLiveGap = lastRef != null ?
+        Date.now() / 1000 - (lastRef + parsedMpd.availabilityStartTime) : 10;
     }
   }
 

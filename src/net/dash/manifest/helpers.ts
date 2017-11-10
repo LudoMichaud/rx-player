@@ -15,7 +15,9 @@
  */
 
 // XML-Schema
+/* tslint:disable:max-line-length */
 // <http://standards.iso.org/ittf/PubliclyAvailableStandards/MPEG-DASH_schema_files/DASH-MPD.xsd>
+/* tslint:enable:max-line-length */
 
 import arrayIncludes from "../../../utils/array-includes";
 import assert from "../../../utils/assert";
@@ -39,7 +41,7 @@ const KNOWN_ADAPTATION_TYPES = ["audio", "video", "text", "image"];
  * @param {Object} index
  * @returns {Number}
  */
-function calculateIndexLastLiveTimeReference(index: IIndex) : number {
+function calculateIndexLastLiveTimeReference(index: IIndex) : number|undefined {
   if (index.indexType === "timeline") {
     const { ts, r, d } = index.timeline[index.timeline.length - 1];
 
@@ -48,8 +50,6 @@ function calculateIndexLastLiveTimeReference(index: IIndex) : number {
     const securityTime = Math.min(Math.max(dd / index.timescale, 5), 10);
     return ((ts + (r + 1) * dd) / index.timescale) - securityTime;
   }
-  // By default (e.g. for templates), live Edge is right now - 5s
-  return Date.now() / 1000 - 5;
 }
 
 /**
@@ -320,18 +320,20 @@ const getLastLiveTimeReference = (adaptation: IAdaptationDash): number|undefined
     return calculateIndexLastLiveTimeReference(adaptation.index);
   }
 
-  const representationsMin = Math.min(
-    ...representationsWithIndex
-      .map((r: IRepresentationDash) => {
-        if (r.index) {
-          return calculateIndexLastLiveTimeReference(r.index);
-        } else {
-          return Infinity;
-        }
-      })
-  );
+  const lastLiveTimeReferences : Array<number|undefined> = representationsWithIndex
+    .map(representation => {
+      return representation.index ?
+        calculateIndexLastLiveTimeReference(representation.index) :
+        undefined;
+    });
 
-  // should not happen, means invalid index data has been found
+  if (lastLiveTimeReferences.some((x) => x == null)) {
+    return;
+  }
+
+  const representationsMin = Math.min(...lastLiveTimeReferences as number[]);
+
+  // if the last live time reference could not be calculated, return undefined
   if (isNaN(representationsMin)) {
     return;
   }
@@ -342,7 +344,9 @@ const getLastLiveTimeReference = (adaptation: IAdaptationDash): number|undefined
 
   if (adaptation.index) {
     const adaptationRef = calculateIndexLastLiveTimeReference(adaptation.index);
-    return Math.min(representationsMin, adaptationRef);
+    if (adaptationRef) {
+      return Math.min(representationsMin, adaptationRef);
+    }
   }
 };
 
