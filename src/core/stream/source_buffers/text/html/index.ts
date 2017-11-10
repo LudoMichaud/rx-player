@@ -37,6 +37,7 @@ export interface IHTMLTextTrackData {
   data : string;
   type : string;
   language : string;
+  timeOffset : number;
 }
 
 const {
@@ -144,6 +145,7 @@ export default class HTMLTextTrackSourceBuffer extends AbstractSourceBuffer {
    * @param {string} data.language
    * @param {Number} data.timescale
    * @param {Number} data.start
+   * @param {Number} data.timeOffset
    * @param {Number|undefined} data.end
    */
   _append(data : IHTMLTextTrackData) : void {
@@ -154,10 +156,13 @@ export default class HTMLTextTrackSourceBuffer extends AbstractSourceBuffer {
       data: dataString, // text track content. Should be a string
       type, // type of texttracks (e.g. "ttml" or "vtt")
       language, // language the texttrack is in
+      timeOffset,
     } = data;
     if (timescaledEnd && timescaledEnd - timescaledStart <= 0) {
       // this is accepted for error resilience, just skip that case.
+      /* tslint:disable:max-line-length */
       log.warn("Invalid text track appended: the start time is inferior or equal to the end time.");
+      /* tslint:enable:max-line-length */
       return;
     }
 
@@ -165,7 +170,8 @@ export default class HTMLTextTrackSourceBuffer extends AbstractSourceBuffer {
     const endTime = timescaledEnd != null ?
       timescaledEnd / timescale : undefined;
 
-    const cues = parseTextTrackToElements(type, dataString, language);
+    const cues = parseTextTrackToElements(
+      type, dataString, timeOffset, language);
     const start = startTime;
     const end = endTime != null ? endTime : cues[cues.length - 1].end;
     this._buffer.insert(cues, start, end);

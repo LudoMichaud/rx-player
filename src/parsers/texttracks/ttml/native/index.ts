@@ -66,7 +66,15 @@ const TEXT_ALIGN_TO_POSITION_ALIGN : IDictionary<string> = {
   right: "line-right",
 };
 
-function parseTTMLStringToVTT(str : string) : Array<VTTCue|TextTrackCue> {
+/**
+ * @param {string} str
+ * @param {Number} timeOffset
+ * @returns {Array.<VTTCue|TextTrackCue>}
+ */
+function parseTTMLStringToVTT(
+  str : string,
+  timeOffset : number
+) : Array<VTTCue|TextTrackCue> {
   const ret : Array<VTTCue|TextTrackCue> = [];
   const xml = new DOMParser().parseFromString(str, "text/xml");
 
@@ -141,7 +149,7 @@ function parseTTMLStringToVTT(str : string) : Array<VTTCue|TextTrackCue> {
 
         const cue = parseCue(
           paragraph,
-          0, // offset
+          timeOffset,
           styles,
           regions,
           paragraphStyle,

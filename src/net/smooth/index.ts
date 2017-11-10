@@ -295,6 +295,7 @@ export default function(
           timescale: _sdTimescale,
           start: _sdStart,
           end: _sdEnd,
+          timeOffset: _sdStart / _sdTimescale,
         },
         segmentInfos,
         nextSegments,

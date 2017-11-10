@@ -97,9 +97,15 @@ function decodeEntities(text : string) : string {
  * may not work for every sami input.
  *
  * @param {string} smi
+ * @param {Number} timeOffset
  * @param {string} lang
+ * @returns {Array.<VTTCue|TextTrackCue>}
  */
-function parseSami(smi : string, lang : string) : Array<TextTrackCue|VTTCue> {
+function parseSami(
+  smi : string,
+  timeOffset : number,
+  lang : string
+) : Array<TextTrackCue|VTTCue> {
   const syncOpen = /<sync[ >]/ig;
   const syncClose = /<sync[ >]|<\/body>/ig;
 
@@ -159,7 +165,10 @@ function parseSami(smi : string, lang : string) : Array<TextTrackCue|VTTCue> {
       if (txt === "&nbsp;") {
         subs[subs.length - 1].end = start;
       } else {
-        subs.push({ text: decodeEntities(txt), start });
+        subs.push({
+          text: decodeEntities(txt),
+          start: start + timeOffset,
+        });
       }
     }
   }

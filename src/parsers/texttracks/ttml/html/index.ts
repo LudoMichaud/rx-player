@@ -47,9 +47,13 @@ import parseCue, { ITTMLHTMLCue } from "./parseCue";
  * Optimizations have been done, principally to avoid using too much XML APIs,
  * but we can still do better.
  * @param {string} str
+ * @param {Number} timeOffset
  * @returns {Array.<Object>}
  */
-export default function parseTTMLStringToDIV(str : string) : ITTMLHTMLCue[] {
+export default function parseTTMLStringToDIV(
+  str : string,
+  timeOffset : number
+) : ITTMLHTMLCue[] {
   const ret : ITTMLHTMLCue[] = [];
   const xml = new DOMParser().parseFromString(str, "text/xml");
 
@@ -129,7 +133,7 @@ export default function parseTTMLStringToDIV(str : string) : ITTMLHTMLCue[] {
 
         const cue = parseCue(
           paragraph,
-          0, // offset
+          timeOffset,
           styles,
           regions,
           body,

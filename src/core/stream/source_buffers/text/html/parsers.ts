@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-type htmlParserFn = (texttrack : string, language? : string) => any[];
+type htmlParserFn =
+  (texttrack : string, timeOffset : number, language? : string) => any[];
 const htmlParsers : { [format : string] : htmlParserFn } = {};
 
 if (__FEATURES__.HTML_SAMI) {
@@ -40,6 +41,7 @@ if (__FEATURES__.HTML_VTT) {
 /**
  * @param {string} type
  * @param {string} data
+ * @param {Number} timeOffset
  * @param {string} [language]
  * @returns {Array.<Object>}
  * @throws Error - Throw if no parser is found for the given type
@@ -47,6 +49,7 @@ if (__FEATURES__.HTML_VTT) {
 export default function parseTextTrackToElements(
   type : string,
   data : string,
+  timeOffset : number,
   language? : string
 ) : any[] {
   const parser = htmlParsers[type];
@@ -54,5 +57,5 @@ export default function parseTextTrackToElements(
   if (!parser) {
     throw new Error("no parser found for the given text track");
   }
-  return parser(data, language);
+  return parser(data, timeOffset, language);
 }

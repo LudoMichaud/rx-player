@@ -117,6 +117,7 @@ export interface ITextTrackSegmentData {
   type : string;
   end? : number;
   language? : string;
+  timeOffset : number;
 }
 
 export type TextTrackParserObservable = Observable<{

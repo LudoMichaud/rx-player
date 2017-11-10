@@ -28,11 +28,13 @@ export interface ISRTHTMLCue {
 }
 
 /**
- * @param {string}
+ * @param {string} srtStr
+ * @param {Number} timeOffset
  * @returns {Array.<Object>}
  */
 export default function parseSRTStringToHTML(
-  srtStr : string
+  srtStr : string,
+  timeOffset : number
 ) : ISRTHTMLCue[] {
   // Even if srt only authorize CRLF, we will also take LF or CR as line
   // terminators for resilience
@@ -54,7 +56,7 @@ export default function parseSRTStringToHTML(
 
   const cues : ISRTHTMLCue[] = [];
   for (let i = 0; i < cueBlocks.length; i++) {
-    const cue = parseCue(cueBlocks[i]);
+    const cue = parseCue(cueBlocks[i], timeOffset);
     if (cue) {
       cues.push(cue);
     }
@@ -65,10 +67,12 @@ export default function parseSRTStringToHTML(
 
 /**
  * @param {Array.<string>} cueLines
+ * @param {Number} timeOffset
  * @returns {Object|null}
  */
 function parseCue(
-  cueLines : string[]
+  cueLines : string[],
+  timeOffset : number
 ) : ISRTHTMLCue|null {
   const [startString, endString] = cueLines[1].split(" --> ");
   const payloadLines = cueLines.slice(2, cueLines.length);
@@ -105,8 +109,8 @@ function parseCue(
   }
 
   return {
-    start,
-    end,
+    start: start + timeOffset,
+    end: end + timeOffset,
     element: pEl,
   };
 }

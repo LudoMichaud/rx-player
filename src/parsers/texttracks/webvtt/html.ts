@@ -39,10 +39,14 @@ interface IStyleElement {
  * Specific style is parsed and applied to class element.
  *
  * @param {string} text
+ * @param {Number} timeOffset
  * @return {Array.<Object>}
  * @throws Error - Throws if the given WebVTT string is invalid.
  */
-export default function parseWebVTT(text : string) : IVTTHTMLCue[] {
+export default function parseWebVTT(
+  text : string,
+  timeOffset : number
+) : IVTTHTMLCue[] {
   const newLineChar = /\r\n|\n|\r/g;
   const linified = text.split(newLineChar);
   const cuesArray : IVTTHTMLCue[] = [];
@@ -81,7 +85,7 @@ export default function parseWebVTT(text : string) : IVTTHTMLCue[] {
           i++;
         }
         const cueBlock = linified.slice(startOfCueBlock, i);
-        const cue = parseCue(cueBlock, styleElements);
+        const cue = parseCue(cueBlock, timeOffset, styleElements);
         if (cue) {
           cuesArray.push(cue);
         }
@@ -186,11 +190,13 @@ function parseStyleBlock(styleBlock : string[]) : IStyleElement[] {
  *
  * Returns undefined if the cue block could not be parsed.
  * @param {Array.<string>} cueBlock
+ * @param {Number} timeOffset
  * @param {Array.<Object>} styleElements
  * @returns {Object|undefined}
  */
 function parseCue(
   cueBlock : string[],
+  timeOffset : number,
   styleElements : IStyleElement[]
 ) : IVTTHTMLCue|undefined {
   const region = document.createElement("div");
@@ -264,8 +270,8 @@ function parseCue(
   pElement.appendChild(spanElement);
 
   return {
-    start: range.start,
-    end: range.end,
+    start: range.start + timeOffset,
+    end: range.end + timeOffset,
     element: region,
   };
 }

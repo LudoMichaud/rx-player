@@ -99,9 +99,10 @@ function decodeEntities(text : string) : string {
  * may not work for every sami input.
  *
  * @param {string} smi
+ * @param {Number} timeOffset
  * @param {string} lang
  */
-function parseSami(smi : string, lang : string) : ISAMIHTMLCue[] {
+function parseSami(smi : string, timeOffset : number, lang : string) : ISAMIHTMLCue[] {
   const syncOpen = /<sync[ >]/ig;
   const syncClose = /<sync[ >]|<\/body>/ig;
 
@@ -197,7 +198,7 @@ function parseSami(smi : string, lang : string) : ISAMIHTMLCue[] {
 
         subs.push({
           element: wrapperEl,
-          start,
+          start: start + timeOffset,
           end: -1, // Will be updated on a following iteration
         });
       }

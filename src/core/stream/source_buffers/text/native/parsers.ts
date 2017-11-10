@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-type nativeParserFn =
-  (texttrack : string, language? : string) => VTTCue[]|TextTrackCue[];
+type nativeParserFn = (texttrack : string, timeOffset : number, language? : string) =>
+    VTTCue[]|TextTrackCue[];
 const nativeParsers : { [format : string] : nativeParserFn } = {};
 
 if (__FEATURES__.NATIVE_VTT) {
@@ -41,6 +41,7 @@ if (__FEATURES__.NATIVE_SRT) {
 /**
  * @param {string} type
  * @param {string} data
+ * @param {Number} timeOffset
  * @param {string} [language]
  * @returns {Array.<VTTCue>}
  * @throws Error - Throw if no parser is found for the given type
@@ -48,6 +49,7 @@ if (__FEATURES__.NATIVE_SRT) {
 export default function parseTextTrackToCues(
   type : string,
   data : string,
+  timeOffset : number,
   language : string
 ) : VTTCue[]|TextTrackCue[] {
   const parser = nativeParsers[type];
@@ -56,5 +58,5 @@ export default function parseTextTrackToCues(
     throw new Error("no parser found for the given text track");
   }
 
-  return parser(data, language);
+  return parser(data, timeOffset, language);
 }
