@@ -64,7 +64,7 @@ class Manifest {
   public isLive : boolean;
   public uris : string[];
   public suggestedPresentationDelay? : number;
-  public availabilityStartTime : number;
+  public availabilityStartTime? : number;
   public presentationLiveGap? : number;
   public timeShiftBufferDepth? : number;
 
@@ -109,7 +109,7 @@ class Manifest {
 
     // Will be needed here
     this.suggestedPresentationDelay = args.suggestedPresentationDelay;
-    this.availabilityStartTime = args.availabilityStartTime || 0;
+    this.availabilityStartTime = args.availabilityStartTime;
     this.presentationLiveGap = args.presentationLiveGap;
     this.timeShiftBufferDepth = args.timeShiftBufferDepth;
 
